@@ -1,0 +1,384 @@
+
+openapi: 3.0.3
+
+info:
+  title: Linkly API
+  version: 1.0.0
+  description: >
+    Linkly is a URL shortener API with authentication, link management,
+    redirects, expiry handling, click analytics, pagination and CSV export.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User registration and login
+  - name: Links
+    description: Create and manage shortened URLs
+  - name: Redirect
+    description: Public short-link redirects
+  - name: Analytics
+    description: Click tracking and analytics
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: test@example.com
+        password:
+          type: string
+          minLength: 8
+          example: LinklyTest123!
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: test@example.com
+        password:
+          type: string
+          example: LinklyTest123!
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          example: test@example.com
+        created_at:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          description: JWT authentication token
+
+    CreateLinkRequest:
+      type: object
+      required:
+        - target_url
+      properties:
+        target_url:
+          type: string
+          format: uri
+          example: https://example.com/my-long-page
+        code:
+          type: string
+          minLength: 3
+          maxLength: 16
+          pattern: '^[A-Za-z0-9_-]{3,16}$'
+          example: mylink123
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2027-01-01T00:00:00Z'
+
+    Link:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: IMo4dsEd
+        short_url:
+          type: string
+          example: http://localhost:3000/IMo4dsEd
+        target_url:
+          type: string
+          example: https://example.com/my-long-page
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        click_count:
+          type: integer
+          example: 0
+        reused:
+          type: boolean
+          example: false
+
+    Click:
+      type: object
+      properties:
+        id:
+          type: integer
+        clicked_at:
+          type: string
+          format: date-time
+        referrer:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+
+    ClickPage:
+      type: object
+      properties:
+        clicks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Click'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page; null when there are no more results
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Resource not found
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid registration data
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Log in to an existing account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid email or password
+
+  /links:
+    post:
+      tags:
+        - Links
+      summary: Create a shortened URL
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLinkRequest'
+      responses:
+        '201':
+          description: Short link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '400':
+          description: Invalid URL, code or expiry date
+        '401':
+          description: Authentication required
+        '409':
+          description: Custom short code already taken
+
+  /{code}:
+    get:
+      tags:
+        - Redirect
+      summary: Redirect to the original URL
+      description: Public endpoint. Records the visit and increments the click counter.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 16
+          example: IMo4dsEd
+      responses:
+        '302':
+          description: Redirect to the original URL
+          headers:
+            Location:
+              description: Original destination URL
+              schema:
+                type: string
+                format: uri
+        '404':
+          description: Short code not found
+        '410':
+          description: Short link has expired
+
+  /links/{code}:
+    get:
+      tags:
+        - Links
+        - Analytics
+      summary: Get link metadata and click count
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Link information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '401':
+          description: Authentication required
+        '404':
+          description: Link not found
+
+    delete:
+      tags:
+        - Links
+      summary: Delete a short link and its click history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Link and associated clicks deleted
+        '401':
+          description: Authentication required
+        '404':
+          description: Link not found
+
+  /links/{code}/clicks:
+    get:
+      tags:
+        - Analytics
+      summary: Get paginated click history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          required: false
+          description: Cursor returned by the previous page
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of clicks to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Paginated click history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClickPage'
+        '401':
+          description: Authentication required
+        '404':
+          description: Link not found
+
+  /links/{code}/clicks.csv:
+    get:
+      tags:
+        - Analytics
+      summary: Export click history as CSV
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV click history
+          content:
+            text/csv:
+              schema:
+                type: string
+                example: |
+                  id,clicked_at,referrer,user_agent
+                  1,2026-10-29T21:05:11Z,https://google.com,Chrome
+        '401':
+          description: Authentication required
+        '404':
+          description: Link not found
+
