@@ -16,13 +16,41 @@ import { pool } from './config/database.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load OpenAPI documentation.
+// Load Linkly API documentation.
 const openapiDocument = YAML.parse(
   readFileSync(
     path.join(__dirname, '../docs/openapi.yaml'),
     'utf8'
   )
 );
+
+// Ensure the documentation displays Linkly branding.
+openapiDocument.info = {
+  ...openapiDocument.info,
+  title: 'Linkly API',
+  description: `
+# Welcome to Linkly
+
+A URL Shortening and Analytics API built with Node.js and PostgreSQL.
+
+Linkly helps you create short links, manage custom URLs,
+redirect visitors and monitor link performance through click analytics.
+
+## Main Features
+
+- User registration and authentication
+- URL shortening and custom short codes
+- Fast URL redirection
+- Link expiration management
+- Click tracking and analytics
+- Paginated click history
+- CSV analytics export
+
+Use the Authorize button to provide your JWT access token
+when accessing protected endpoints.
+  `,
+  version: '1.0.0',
+};
 
 const app = express();
 
@@ -40,11 +68,117 @@ app.use(express.json({ limit: '10kb' }));
 app.use('/auth', authRoutes);
 app.use('/links', linkRoutes);
 
+// Custom Linkly Swagger appearance.
+const swaggerOptions = {
+  customSiteTitle: 'Linkly | API Documentation',
+  customfavIcon: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/link-2.svg',
+  customCss: `
+    body {
+      background: #f8fafc;
+    }
+
+    .swagger-ui .topbar {
+      background: #111827;
+      padding: 14px 0;
+    }
+
+    .swagger-ui .topbar-wrapper {
+      display: flex;
+      align-items: center;
+    }
+
+    .swagger-ui .topbar-wrapper img {
+      display: none;
+    }
+
+    .swagger-ui .topbar-wrapper::after {
+      content: "LINKLY";
+      color: #ffffff;
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      margin-left: 10px;
+    }
+
+    .swagger-ui .topbar-wrapper::before {
+      content: "↗";
+      color: #60a5fa;
+      font-size: 30px;
+      font-weight: bold;
+    }
+
+    .swagger-ui .info {
+      margin: 35px 0;
+    }
+
+    .swagger-ui .info .title {
+      color: #111827;
+      font-size: 34px;
+      font-weight: 800;
+    }
+
+    .swagger-ui .info p,
+    .swagger-ui .info li {
+      color: #475569;
+      line-height: 1.7;
+    }
+
+    .swagger-ui .scheme-container {
+      background: #ffffff;
+      box-shadow: none;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 15px;
+    }
+
+    .swagger-ui .opblock {
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .swagger-ui .opblock .opblock-summary {
+      padding: 12px;
+    }
+
+    .swagger-ui .btn.authorize {
+      color: #15803d;
+      border-color: #15803d;
+      border-radius: 6px;
+    }
+
+    .swagger-ui .btn.authorize svg {
+      fill: #15803d;
+    }
+
+    .swagger-ui section.models {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .swagger-ui .model-box {
+      background: #f8fafc;
+    }
+
+    .swagger-ui .info a {
+      color: #2563eb;
+    }
+  `,
+  customSiteTitle: 'Linkly | API Documentation',
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    filter: true,
+    docExpansion: 'list',
+    defaultModelsExpandDepth: 1,
+  },
+};
+
 // Swagger documentation.
 app.use(
   '/docs',
   swaggerUi.serve,
-  swaggerUi.setup(openapiDocument)
+  swaggerUi.setup(openapiDocument, swaggerOptions)
 );
 
 // Welcome route.
@@ -57,7 +191,6 @@ app.get('/', (req, res) => {
 });
 
 // Health check.
-// IMPORTANT: This must come before the redirect route.
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -115,7 +248,7 @@ app.get('/:code', async (req, res) => {
       });
     }
 
-    // Increment the click counter atomically.
+    // Increment click counter atomically.
     await client.query(
       `UPDATE links
        SET click_count = click_count + 1
@@ -123,7 +256,7 @@ app.get('/:code', async (req, res) => {
       [link.id]
     );
 
-    // Save information about the visit.
+    // Record visitor information.
     await client.query(
       `INSERT INTO clicks (link_id, referrer, user_agent)
        VALUES ($1, $2, $3)`,
@@ -160,9 +293,10 @@ app.use((req, res) => {
   });
 });
 
-// Start the server.
+// Start server.
 const server = app.listen(env.PORT, () => {
   console.log(`Linkly API running at ${env.BASE_URL}`);
+  console.log(`API Documentation: ${env.BASE_URL}/docs`);
 });
 
 // Graceful shutdown.

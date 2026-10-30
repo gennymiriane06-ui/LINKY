@@ -4,32 +4,87 @@ openapi: 3.0.3
 info:
   title: Linkly API
   version: 1.0.0
-  description: >
-    Linkly is a URL shortener API with authentication, link management,
-    redirects, expiry handling, click analytics, pagination and CSV export.
+  description: |
+    # LINKLY — URL SHORTENING & ANALYTICS
+
+    Welcome to Linkly, a URL management service designed to make long
+    links shorter, easier to share and easier to monitor.
+
+    Linkly provides a REST API for creating short links, managing
+    destinations, redirecting visitors and monitoring link performance.
+
+    ## What you can do
+
+    - Create short URLs from long destination URLs.
+    - Choose custom short codes.
+    - Register and authenticate users.
+    - Set expiration dates for links.
+    - Redirect visitors to original destinations.
+    - Track clicks and visitor information.
+    - Browse click history using pagination.
+    - Export analytics as CSV files.
+    - Manage and delete shortened links.
+
+    ## Authentication
+
+    Registration and login are public endpoints.
+
+    Protected endpoints require a JWT access token.
+
+    To authenticate:
+    1. Register or log in using the Authentication endpoints.
+    2. Copy the returned token.
+    3. Click the Authorize button.
+    4. Enter your token.
+    5. Click Authorize to access protected operations.
+
+    ## Response conventions
+
+    - 200: Request completed successfully.
+    - 201: Resource created.
+    - 204: Resource deleted successfully.
+    - 302: Redirect to the original destination.
+    - 400: Invalid request data.
+    - 401: Authentication required or invalid credentials.
+    - 404: Requested resource not found.
+    - 409: Resource conflict.
+    - 410: Short link has expired.
+    - 500: Internal server error.
+
+    ## Getting started
+
+    Start by registering an account, then create your first shortened
+    URL using the Links endpoint.
+
+    All request and response examples are provided below.
 
 servers:
   - url: http://localhost:3000
-    description: Local development server
+    description: Local development environment
 
 tags:
   - name: Authentication
-    description: User registration and login
+    description: Register an account and authenticate with Linkly.
   - name: Links
-    description: Create and manage shortened URLs
+    description: Create, retrieve and manage shortened URLs.
   - name: Redirect
-    description: Public short-link redirects
+    description: Public redirection for shortened links.
   - name: Analytics
-    description: Click tracking and analytics
+    description: Monitor visitor activity and export click reports.
+  - name: System
+    description: API availability and health information.
 
 components:
+
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Enter the JWT token returned after successful login.
 
   schemas:
+
     RegisterRequest:
       type: object
       required:
@@ -39,11 +94,11 @@ components:
         email:
           type: string
           format: email
-          example: test@example.com
+          example: user@example.com
         password:
           type: string
           minLength: 8
-          example: LinklyTest123!
+          example: SecurePassword123!
 
     LoginRequest:
       type: object
@@ -54,10 +109,10 @@ components:
         email:
           type: string
           format: email
-          example: test@example.com
+          example: user@example.com
         password:
           type: string
-          example: LinklyTest123!
+          example: SecurePassword123!
 
     User:
       type: object
@@ -67,10 +122,12 @@ components:
           example: 1
         email:
           type: string
-          example: test@example.com
+          format: email
+          example: user@example.com
         created_at:
           type: string
           format: date-time
+          example: '2026-10-29T10:30:00Z'
 
     AuthResponse:
       type: object
@@ -79,7 +136,8 @@ components:
           $ref: '#/components/schemas/User'
         token:
           type: string
-          description: JWT authentication token
+          description: JWT access token.
+          example: your-jwt-access-token
 
     CreateLinkRequest:
       type: object
@@ -89,17 +147,20 @@ components:
         target_url:
           type: string
           format: uri
-          example: https://example.com/my-long-page
+          description: The original URL visitors will be redirected to.
+          example: https://example.com/products/technology
         code:
           type: string
           minLength: 3
           maxLength: 16
           pattern: '^[A-Za-z0-9_-]{3,16}$'
+          description: Optional custom short code.
           example: mylink123
         expires_at:
           type: string
           format: date-time
           nullable: true
+          description: Optional expiration date in ISO 8601 format.
           example: '2027-01-01T00:00:00Z'
 
     Link:
@@ -110,13 +171,15 @@ components:
           example: 1
         code:
           type: string
-          example: IMo4dsEd
+          example: mylink123
         short_url:
           type: string
-          example: http://localhost:3000/IMo4dsEd
+          format: uri
+          example: http://localhost:3000/mylink123
         target_url:
           type: string
-          example: https://example.com/my-long-page
+          format: uri
+          example: https://example.com/products/technology
         created_at:
           type: string
           format: date-time
@@ -126,7 +189,7 @@ components:
           nullable: true
         click_count:
           type: integer
-          example: 0
+          example: 25
         reused:
           type: boolean
           example: false
@@ -136,15 +199,19 @@ components:
       properties:
         id:
           type: integer
+          example: 12
         clicked_at:
           type: string
           format: date-time
+          example: '2026-10-29T21:05:11Z'
         referrer:
           type: string
           nullable: true
+          example: https://google.com
         user_agent:
           type: string
           nullable: true
+          example: Mozilla/5.0
 
     ClickPage:
       type: object
@@ -156,7 +223,7 @@ components:
         next_cursor:
           type: string
           nullable: true
-          description: Cursor for the next page; null when there are no more results
+          description: Cursor to retrieve the next page of click records.
 
     Error:
       type: object
@@ -166,57 +233,77 @@ components:
           example: Resource not found
 
 paths:
+
   /auth/register:
     post:
       tags:
         - Authentication
-      summary: Register a new user
+      summary: Create a Linkly account
+      description: Register a new user account using an email address and password.
+      operationId: registerUser
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: user@example.com
+              password: SecurePassword123!
       responses:
         '201':
-          description: Account created successfully
+          description: Account successfully created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
-          description: Invalid registration data
+          description: Invalid registration information.
         '409':
-          description: Email already exists
+          description: An account with this email already exists.
 
   /auth/login:
     post:
       tags:
         - Authentication
-      summary: Log in to an existing account
+      summary: Authenticate a user
+      description: Log in and receive a JWT access token.
+      operationId: loginUser
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: user@example.com
+              password: SecurePassword123!
       responses:
         '200':
-          description: Login successful
+          description: Authentication successful.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
-          description: Invalid request
+          description: Invalid request data.
         '401':
-          description: Invalid email or password
+          description: Incorrect email or password.
 
   /links:
     post:
       tags:
         - Links
       summary: Create a shortened URL
+      description: |
+        Create a new shortened URL.
+
+        You can provide your own custom code or allow Linkly to
+        generate one automatically. An optional expiration date
+        can also be specified.
+
+        This endpoint requires authentication.
+      operationId: createShortLink
       security:
         - bearerAuth: []
       requestBody:
@@ -225,79 +312,107 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateLinkRequest'
+            example:
+              target_url: https://example.com/my-long-page
+              code: mylink123
+              expires_at: '2027-01-01T00:00:00Z'
       responses:
         '201':
-          description: Short link created
+          description: Short link created successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Link'
+        '200':
+          description: Existing shortened link reused, if supported by the implementation.
         '400':
-          description: Invalid URL, code or expiry date
+          description: Invalid destination URL, short code or expiration date.
         '401':
-          description: Authentication required
+          description: Authentication required.
         '409':
-          description: Custom short code already taken
+          description: Custom short code already taken.
 
   /{code}:
     get:
       tags:
         - Redirect
-      summary: Redirect to the original URL
-      description: Public endpoint. Records the visit and increments the click counter.
+      summary: Visit a shortened URL
+      description: |
+        Public endpoint that redirects visitors to the original destination.
+
+        Every successful redirect records visitor information and
+        increments the link's click counter.
+      operationId: redirectShortLink
       parameters:
         - name: code
           in: path
           required: true
+          description: The unique short code.
           schema:
             type: string
             minLength: 3
             maxLength: 16
-          example: IMo4dsEd
+          example: mylink123
       responses:
         '302':
-          description: Redirect to the original URL
+          description: Visitor redirected to the original destination.
           headers:
             Location:
-              description: Original destination URL
+              description: Original destination URL.
               schema:
                 type: string
                 format: uri
         '404':
-          description: Short code not found
+          description: Short link does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '410':
-          description: Short link has expired
+          description: Short link has expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /links/{code}:
     get:
       tags:
         - Links
         - Analytics
-      summary: Get link metadata and click count
+      summary: Retrieve link information
+      description: |
+        Retrieve the destination URL, creation date, expiration date
+        and total click count for a shortened link.
+      operationId: getShortLink
       security:
         - bearerAuth: []
       parameters:
         - name: code
           in: path
           required: true
+          description: Short code of the link.
           schema:
             type: string
+          example: mylink123
       responses:
         '200':
-          description: Link information
+          description: Link information retrieved successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Link'
         '401':
-          description: Authentication required
+          description: Authentication required.
         '404':
-          description: Link not found
+          description: Link not found.
 
     delete:
       tags:
         - Links
-      summary: Delete a short link and its click history
+      summary: Delete a shortened URL
+      description: Delete a shortened link and its associated click history.
+      operationId: deleteShortLink
       security:
         - bearerAuth: []
       parameters:
@@ -306,37 +421,46 @@ paths:
           required: true
           schema:
             type: string
+          example: mylink123
       responses:
         '204':
-          description: Link and associated clicks deleted
+          description: Link and associated click records deleted.
         '401':
-          description: Authentication required
+          description: Authentication required.
         '404':
-          description: Link not found
+          description: Link not found.
 
   /links/{code}/clicks:
     get:
       tags:
         - Analytics
-      summary: Get paginated click history
+      summary: Retrieve click analytics
+      description: |
+        Retrieve visitor activity for a shortened URL.
+
+        Results are paginated to make it easier to retrieve large
+        amounts of click data.
+      operationId: getClickHistory
       security:
         - bearerAuth: []
       parameters:
         - name: code
           in: path
           required: true
+          description: Short code to retrieve analytics for.
           schema:
             type: string
+          example: mylink123
         - name: after
           in: query
           required: false
-          description: Cursor returned by the previous page
+          description: Cursor returned by the previous response.
           schema:
             type: string
         - name: limit
           in: query
           required: false
-          description: Maximum number of clicks to return
+          description: Maximum number of click records to return.
           schema:
             type: integer
             minimum: 1
@@ -344,32 +468,36 @@ paths:
             default: 20
       responses:
         '200':
-          description: Paginated click history
+          description: Click history retrieved successfully.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClickPage'
         '401':
-          description: Authentication required
+          description: Authentication required.
         '404':
-          description: Link not found
+          description: Link not found.
 
   /links/{code}/clicks.csv:
     get:
       tags:
         - Analytics
-      summary: Export click history as CSV
+      summary: Export click analytics
+      description: Download click history as a CSV file.
+      operationId: exportClickHistory
       security:
         - bearerAuth: []
       parameters:
         - name: code
           in: path
           required: true
+          description: Short code to export analytics for.
           schema:
             type: string
+          example: mylink123
       responses:
         '200':
-          description: CSV click history
+          description: CSV report generated successfully.
           content:
             text/csv:
               schema:
@@ -378,7 +506,6 @@ paths:
                   id,clicked_at,referrer,user_agent
                   1,2026-10-29T21:05:11Z,https://google.com,Chrome
         '401':
-          description: Authentication required
+          description: Authentication required.
         '404':
-          description: Link not found
-
+          description: Link not found.
